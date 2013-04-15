@@ -15,9 +15,9 @@ var VistaFinanciamiento = Backbone.View.extend({
 	el:"body",
 
 	events: {
-		"click button.button1": "renderPorCantidad",
 		"click button.button2": "renderPorFinanciamiento",
-		"click button.button3": "renderChart"
+		"click button.button3": "renderChart",
+		"click input[type=radio]" : "changeVulnerabilidad"
 	},
 
 	
@@ -38,26 +38,50 @@ var VistaFinanciamiento = Backbone.View.extend({
 		})
 	},
 
-	renderPorCantidad: function(e) {
-		this.svg.selectAll(".axis")
-			.transition()
-			.remove();
+	changeVulnerabilidad : function(e) {
+		opcion = $(e.target).val();
+		if (opcion=="alta") {
+			var filteredData = _.filter(this.data2011, function(d) {return d.ive_media>50})
 
-		this.pack.value(function(d) { return 10; })
-		this.mynodes = this.pack.nodes(this.nestedData[0]);
 
-		this.svg.selectAll(".node")
-			.data(this.mynodes.filter(function(d) { return (d.key!="Chile"); }))
-			.transition()
-			.duration(3000)
-			.attr("cx", function(d) { return  d.x  })
-			.attr("cy", function(d) { return  d.y  })
-			.attr("r", function(d) { return d.r; });
-		
+			this.nestedData = d3.nest()
+				.key(function(d) {return "Chile";})
+				.entries(filteredData);
+
+
+
+		} else if (opcion=="baja") {
+			var filteredData = _.filter(this.data2011, function(d) {return d.ive_media<=50})
+
+
+			this.nestedData = d3.nest()
+				.key(function(d) {return "Chile";})
+				.entries(filteredData);
+
+			
+		} else if (opcion=="todos") {
+			var filteredData = this.data2011;
+
+
+			this.nestedData = d3.nest()
+				.key(function(d) {return "Chile";})
+				.entries(filteredData);
+
+			
+		}
+
+		if (this.currentView=="Financiamiento") {
+			this.renderPorFinanciamiento();
+		} else {
+			this.renderChart();
+		}
 
 	},
 
+
 	renderPorFinanciamiento: function(e) {
+		this.currentView = "Financiamiento";
+
 		this.svg.selectAll(".axis")
 			.transition()
 			.remove();
@@ -65,6 +89,53 @@ var VistaFinanciamiento = Backbone.View.extend({
 		this.pack.value(function(d) { return d.financiamiento; });
 		this.mynodes = this.pack.nodes(this.nestedData[0]);
 
+		/*************/
+		this.node = this.svg.selectAll(".node")
+			.data(this.mynodes.filter(function(d) { return (d.key!="Chile"); }), function(d) {return d.key ? d.key : d.rbd});
+
+		
+		this.node
+			.exit()
+			.transition()
+			.duration(3000)
+			.attr("cx", function(d) { return 0; })
+			.attr("cy", function(d) { return 0; })
+			.attr("r", function(d) { return 0; })
+			.remove();
+		
+		this.node
+			.enter()
+			.append("circle")
+			.attr("class", this.nodeClass)
+			.on("mouseenter", function(d) {
+				var event = d3.event;
+				if (d.rbd) {
+					$("#rollover").html(d.nombre_establecimiento+" ("+d.rbd + ") -"+d.nombre_comuna);
+					$("#rollover").append("<br>Financiamiento 2011: $" + format(d.financiamiento));
+					$("#rollover").append("<br>PSU Leng: " + d.psu_lenguaje +" PSU Mat: "  + d.psu_matematica);
+
+				} else {
+					$("#rollover").html(d.key+ " - " +d.values.length);
+
+				}
+			
+				$("#rollover").show().css({"top":event.y+10, "left":event.x-200});
+			})			
+			.on("mouseleave", function(d) {
+				$("#rollover").hide();
+			});
+
+
+
+		this.node
+			.transition()
+			.duration(3000)
+		  .attr("cx", function(d) { return d.x; })
+		  .attr("cy", function(d) { return d.y; })
+		  .attr("r", function(d) { return d.r});
+
+		/*************/
+		/*
 		this.svg.selectAll(".node")
 			.data(this.mynodes.filter(function(d) { return (d.key!="Chile"); }))
 			.transition()
@@ -72,11 +143,18 @@ var VistaFinanciamiento = Backbone.View.extend({
 			.attr("cx", function(d) { return  d.x  })
 			.attr("cy", function(d) { return  d.y  })
 			.attr("r", function(d) { return d.r; });
+			*/
 	},
 
 	
 	renderChart: function() {		
 		$element = this.$el;
+		this.currentView = "PSUvsFinanciamiento";
+
+		this.svg.selectAll(".axis")
+			.remove();
+
+		this.$opcionesVulnerabilidad.show();
 
 		var formatNumber = d3.format("s"); // for formatting integers
     
@@ -100,8 +178,9 @@ var VistaFinanciamiento = Backbone.View.extend({
 
 		//x.domain(d3.extent(this.data2012, function(d) { return d.financiamiento; })).nice();
 		//y.domain(d3.extent(this.data2012, function(d) { return d.psu_lenguaje; })).nice();
-		x.domain(d3.extent(this.data2012, function(d) { return d.value})).nice();
-		y.domain(d3.extent(this.data2012, function(d) { return d.psu_lenguaje; })).nice();
+		x.domain(d3.extent(this.data2011, function(d) { return d.value})).nice();
+		y.domain(d3.extent(this.data2011, function(d) { return d.psu_lenguaje; })).nice();
+
 
 		this.svg.append("g")
 		  .attr("class", "x axis")
@@ -125,6 +204,45 @@ var VistaFinanciamiento = Backbone.View.extend({
 		  .style("text-anchor", "end")
 		  .text("PSU Lenguaje")
 
+		this.mynodes = this.pack.nodes(this.nestedData[0]);
+
+		this.node = this.svg.selectAll(".node")
+			.data(this.mynodes.filter(function(d) { return (d.key!="Chile"); }), function(d) {return d.key ? d.key : d.rbd});
+
+		
+		this.node
+			.exit()
+			.transition()
+			.duration(3000)
+			.attr("cx", function(d) { return 0; })
+			.attr("cy", function(d) { return 0; })
+			.attr("r", function(d) { return 0; })
+			.remove();
+		
+		this.node
+			.enter()
+			.append("circle")
+			.attr("class", this.nodeClass)
+			.on("mouseenter", function(d) {
+				var event = d3.event;
+				if (d.rbd) {
+					$("#rollover").html(d.nombre_establecimiento+" ("+d.rbd + ") -"+d.nombre_comuna);
+					$("#rollover").append("<br>Financiamiento 2011: $" + format(d.financiamiento));
+					$("#rollover").append("<br>PSU Leng: " + d.psu_lenguaje +" PSU Mat: "  + d.psu_matematica);
+
+				} else {
+					$("#rollover").html(d.key+ " - " +d.values.length);
+
+				}
+			
+				$("#rollover").show().css({"top":event.y+10, "left":event.x-200});
+			})
+			.on("mouseleave", function(d) {
+				$("#rollover").hide();
+			});
+
+
+
 		this.node
 			.transition()
 			.duration(3000)
@@ -135,31 +253,26 @@ var VistaFinanciamiento = Backbone.View.extend({
 
 
 
+
 	},
 
 	render: function() {
 		$element = this.$el;
 
 		// Interactio Buttons at the top
-		$element.append("<button class='button1'>Financiamineto (cantidad de establecimientos)</button>");
-		$element.append("<button class='button2'>Financiamiento (x monto)</button>");
+		//$element.append("<button class='button1'>Financiamineto (cantidad de establecimientos)</button>");
+		$element.append("<button class='button2'>Financiamiento (espiral)</button>");
 		$element.append("<button class='button3'>Financiamiento v/s PSU</button>");
+		this.$opcionesVulnerabilidad = this.createSelectorVulnerabilidad();
+		
 
 		// Data arrangement
-		this.data2012 = _.filter(this.data, function(d) {return d.agno==2011});
-		this.data2012 = _.sortBy(this.data2012, function(d) {return d.financiamiento})
+		this.data2011 = _.filter(this.data, function(d) {return d.agno==2011});
+		this.data2011 = _.sortBy(this.data2011, function(d) {return d.financiamiento})
 
 		this.nestedData = d3.nest()
 							.key(function(d) {return "Chile";})
-							.key(function(d) {
-								if (d.financiamiento < 400000000)
-									return "Bajo $400MM/año";
-								else if (d.financiamiento < 700000000)
-									return "$400MM a $700MM/año";
-								else 
-									return "Sobre $700MM/año";
-							})
-							.entries(this.data2012);
+							.entries(this.data2011);
 
 		format = d3.format(",d");
 
@@ -184,21 +297,7 @@ var VistaFinanciamiento = Backbone.View.extend({
 		this.node = this.svg.selectAll(".node")
 			.data(this.mynodes.filter(function(d) { return (d.key!="Chile"); }), function(d) {return d.key ? d.key : d.rbd})
 			.enter().append("circle")
-			.attr("class", nodeClass)
-			//.attr("cx", function(d) { return  d.x  })
-			//.attr("cy", function(d) { return  d.y  })
-			//.attr("r", function(d) { return d.r; });
-
-
-		function nodeClass(d) {
-			if (d.values) {
-				return "node"
-			} else {
-				return d.dependencia=="Municipal" ? "leaf node municipal" : "leaf node otro"; 
-			}
-
-		}
-
+			.attr("class", this.nodeClass)
 
 		this.node.on("mouseenter", function(d) {
 			var event = d3.event;
@@ -223,8 +322,44 @@ var VistaFinanciamiento = Backbone.View.extend({
 
 
 		this.renderPorFinanciamiento();
+		this.renderLegend();
+		$element.append(this.$opcionesVulnerabilidad);
+	},
 
-		var legendData = [{color:"red", category:"Municipal"}, {color:"blue", category:"Part. Subvencioando"}]
+	createSelectorVulnerabilidad : function () {
+		radio1 = $("<input>").attr("type", "radio")
+			.attr("name", "optVulnerabilidad")
+			.attr("id", "optVulTodos")
+			.attr("type", "radio")
+			.attr("value", "todos")
+			.attr("checked", "checked");
+		label1 = $("<label>").attr("for", "optVulTodos").text("Todos");
+		radio2 = $("<input>").attr("type", "radio")
+			.attr("name", "optVulnerabilidad")
+			.attr("id", "optVulAlta")
+			.attr("type", "radio")
+			.attr("value", "alta")
+		label2 = $("<label>").attr("for", "optVulAlta").text("Vulnerabilidad Alta (>50%)");
+		radio3 = $("<input>").attr("type", "radio")
+			.attr("name", "optVulnerabilidad")
+			.attr("id", "optVulABaja")
+			.attr("type", "radio")
+			.attr("value", "baja")
+		label3 = $("<label>").attr("for", "optVulABaja").text("Vulnerabilidad Baja (<=50%)");
+
+		return $("<div id='selectorVulnerabilidad'>").append(radio1).append(label1).append(radio2).append(label2).append(radio3).append(label3);
+	},
+
+	nodeClass : function(d) {
+		if (d.values) {
+				return "node"
+			} else {
+				return d.dependencia=="Municipal" ? "leaf node municipal" : "leaf node otro"; 
+			}
+	},
+
+	renderLegend : function() {
+		var legendData = [{color:"blue", category:"Municipal"}, {color:"red", category:"Part. Subvencioando"}]
 
 		var legend = this.svg.selectAll(".legend")
 		  .data(legendData)
@@ -244,9 +379,13 @@ var VistaFinanciamiento = Backbone.View.extend({
 		  .attr("dy", ".35em")
 		  .style("text-anchor", "end")
 		  .text(function(d) { return d.category; });
+	},
 
+	renderAxis : function() {
 
 	}
+
+
 
 });
 
