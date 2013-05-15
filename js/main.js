@@ -467,7 +467,6 @@ var VistaEjesXY = Backbone.View.extend({
 		this.width = (options && options.width) ? options.width : 500;
 		this.labelX = (options && options.labelX) ? options.labelX : "X";
 		this.labelY = (options && options.labelY) ? options.labelY : "Y";
-
 	},
 
 	render: function() {
